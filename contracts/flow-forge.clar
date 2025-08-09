@@ -71,3 +71,82 @@
     total-votes: uint, ;; Total votes cast
   }
 )
+
+;; Vote Ledger
+;; Immutable record of all voting decisions and their impact
+(define-map votes
+  {
+    proposal-id: uint,
+    voter: principal,
+  }
+  {
+    vote: bool, ;; true for yes, false for no
+    power: uint, ;; Voting power used for this vote
+  }
+)
+
+;; PRIVATE HELPER FUNCTIONS
+
+;; Membership Validation
+;; Efficiently checks if an address holds active membership status
+(define-private (is-member (address principal))
+  (is-some (map-get? members address))
+)
+
+;; Member Authorization Check
+;; Validates member status and returns appropriate error response
+(define-private (check-is-member (address principal))
+  (if (is-member address)
+    (ok true)
+    ERR-NOT-MEMBER
+  )
+)
+
+;; Voting Power Calculator
+;; Converts staked STX balance into proportional voting influence
+(define-private (calculate-voting-power (balance uint))
+  (/ balance u1000000)
+)
+
+;; PUBLIC INTERFACE FUNCTIONS
+
+;; Membership Registration
+;; Enables new participants to join the DAO by staking minimum required STX
+(define-public (join-dao)
+  (let ((membership-fee (var-get minimum-membership-fee)))
+    (asserts! (not (is-member tx-sender)) ERR-ALREADY-MEMBER)
+    (try! (stx-transfer? membership-fee tx-sender (as-contract tx-sender)))
+
+    (map-set members tx-sender {
+      joined-at: block-height,
+      stx-balance: membership-fee,
+      voting-power: (calculate-voting-power membership-fee),
+      proposals-created: u0,
+      last-vote-height: u0,
+    })
+
+    (var-set total-members (+ (var-get total-members) u1))
+    (var-set treasury-balance (+ (var-get treasury-balance) membership-fee))
+    (ok true)
+  )
+)
+
+;; Proposal Creation
+;; Empowers members to submit funding requests and governance initiatives
+(define-public (create-proposal
+    (title (string-ascii 50))
+    (description (string-ascii 500))
+    (amount uint)
+    (recipient principal)
+  )
+  (let (
+      (member-data (unwrap! (map-get? members tx-sender) ERR-NOT-MEMBER))
+      (proposal-id (var-get next-proposal-id))
+    )
+    (asserts! (<= amount (var-get treasury-balance)) ERR-INSUFFICIENT-BALANCE)
+    (asserts! (> (len title) u0) ERR-INVALID-AMOUNT)
+    (asserts! (> (len description) u0) ERR-INVALID-AMOUNT)
+    (asserts! (is-eq recipient recipient) ERR-INVALID-AMOUNT)
+
+    (map-set proposals proposal-id {
+      creator: tx-sender,
