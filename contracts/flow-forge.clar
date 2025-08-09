@@ -118,7 +118,7 @@
     (try! (stx-transfer? membership-fee tx-sender (as-contract tx-sender)))
 
     (map-set members tx-sender {
-      joined-at: block-height,
+      joined-at: stacks-block-height,
       stx-balance: membership-fee,
       voting-power: (calculate-voting-power membership-fee),
       proposals-created: u0,
@@ -154,8 +154,8 @@
       description: description,
       amount: amount,
       recipient: recipient,
-      created-at: block-height,
-      expires-at: (+ block-height (var-get proposal-duration)),
+      created-at: stacks-block-height,
+      expires-at: (+ stacks-block-height (var-get proposal-duration)),
       yes-votes: u0,
       no-votes: u0,
       executed: false,
@@ -186,7 +186,7 @@
         false
       ))
     )
-    (asserts! (< block-height (get expires-at proposal)) ERR-PROPOSAL-EXPIRED)
+    (asserts! (< stacks-block-height (get expires-at proposal)) ERR-PROPOSAL-EXPIRED)
     (asserts!
       (is-none (map-get? votes {
         proposal-id: proposal-id,
@@ -218,7 +218,7 @@
     )
 
     (map-set members tx-sender
-      (merge member-data { last-vote-height: block-height })
+      (merge member-data { last-vote-height: stacks-block-height })
     )
     (ok true)
   )
@@ -232,7 +232,7 @@
       (total-votes (get total-votes proposal))
       (yes-votes (get yes-votes proposal))
     )
-    (asserts! (>= block-height (get expires-at proposal)) ERR-PROPOSAL-EXPIRED)
+    (asserts! (>= stacks-block-height (get expires-at proposal)) ERR-PROPOSAL-EXPIRED)
     (asserts! (not (get executed proposal)) ERR-PROPOSAL-EXECUTED)
     (asserts! (>= (* yes-votes u100) (* total-votes (var-get quorum-threshold)))
       ERR-INSUFFICIENT-QUORUM
