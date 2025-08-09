@@ -150,3 +150,76 @@
 
     (map-set proposals proposal-id {
       creator: tx-sender,
+      title: title,
+      description: description,
+      amount: amount,
+      recipient: recipient,
+      created-at: block-height,
+      expires-at: (+ block-height (var-get proposal-duration)),
+      yes-votes: u0,
+      no-votes: u0,
+      executed: false,
+      total-votes: u0,
+    })
+
+    (map-set members tx-sender
+      (merge member-data { proposals-created: (+ (get proposals-created member-data) u1) })
+    )
+    (var-set next-proposal-id (+ proposal-id u1))
+    (ok proposal-id)
+  )
+)
+
+;; Democratic Voting System
+;; Allows members to cast weighted votes on active proposals
+(define-public (vote-on-proposal
+    (proposal-id uint)
+    (vote-bool bool)
+  )
+  (let (
+      (proposal (unwrap! (map-get? proposals proposal-id) ERR-PROPOSAL-NOT-FOUND))
+      (member-data (unwrap! (map-get? members tx-sender) ERR-NOT-MEMBER))
+      (voting-power (get voting-power member-data))
+      ;; Validate the vote-bool input by explicitly checking it
+      (validated-vote (if (is-eq vote-bool true)
+        true
+        false
+      ))
+    )
+    (asserts! (< block-height (get expires-at proposal)) ERR-PROPOSAL-EXPIRED)
+    (asserts!
+      (is-none (map-get? votes {
+        proposal-id: proposal-id,
+        voter: tx-sender,
+      }))
+      ERR-ALREADY-VOTED
+    )
+
+    (map-set votes {
+      proposal-id: proposal-id,
+      voter: tx-sender,
+    } {
+      vote: validated-vote,
+      power: voting-power,
+    })
+
+    (map-set proposals proposal-id
+      (merge proposal {
+        yes-votes: (if validated-vote
+          (+ (get yes-votes proposal) voting-power)
+          (get yes-votes proposal)
+        ),
+        no-votes: (if validated-vote
+          (get no-votes proposal)
+          (+ (get no-votes proposal) voting-power)
+        ),
+        total-votes: (+ (get total-votes proposal) voting-power),
+      })
+    )
+
+    (map-set members tx-sender
+      (merge member-data { last-vote-height: block-height })
+    )
+    (ok true)
+  )
+)
