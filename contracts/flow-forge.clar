@@ -223,3 +223,65 @@
     (ok true)
   )
 )
+
+;; Proposal Execution Engine
+;; Automatically processes approved proposals and distributes treasury funds
+(define-public (execute-proposal (proposal-id uint))
+  (let (
+      (proposal (unwrap! (map-get? proposals proposal-id) ERR-PROPOSAL-NOT-FOUND))
+      (total-votes (get total-votes proposal))
+      (yes-votes (get yes-votes proposal))
+    )
+    (asserts! (>= block-height (get expires-at proposal)) ERR-PROPOSAL-EXPIRED)
+    (asserts! (not (get executed proposal)) ERR-PROPOSAL-EXECUTED)
+    (asserts! (>= (* yes-votes u100) (* total-votes (var-get quorum-threshold)))
+      ERR-INSUFFICIENT-QUORUM
+    )
+
+    (try! (as-contract (stx-transfer? (get amount proposal) tx-sender (get recipient proposal))))
+
+    (map-set proposals proposal-id (merge proposal { executed: true }))
+
+    (var-set treasury-balance
+      (- (var-get treasury-balance) (get amount proposal))
+    )
+    (ok true)
+  )
+)
+
+;; READ-ONLY QUERY FUNCTIONS
+
+;; Proposal Information Retrieval
+;; Provides comprehensive proposal details including voting statistics
+(define-read-only (get-proposal (proposal-id uint))
+  (map-get? proposals proposal-id)
+)
+
+;; Member Profile Access
+;; Returns complete member participation history and current status
+(define-read-only (get-member (address principal))
+  (map-get? members address)
+)
+
+;; Vote History Lookup
+;; Retrieves specific voting decisions for transparency and audit purposes
+(define-read-only (get-vote
+    (proposal-id uint)
+    (voter principal)
+  )
+  (map-get? votes {
+    proposal-id: proposal-id,
+    voter: voter,
+  })
+)
+
+;; DAO Metrics Dashboard
+;; Provides real-time statistics about DAO health and configuration
+(define-read-only (get-dao-info)
+  {
+    total-members: (var-get total-members),
+    treasury-balance: (var-get treasury-balance),
+    minimum-membership-fee: (var-get minimum-membership-fee),
+    quorum-threshold: (var-get quorum-threshold),
+  }
+)
